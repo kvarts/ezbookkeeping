@@ -441,7 +441,7 @@ const showTransactionCategoriesIncludedInHomePageOverviewDialog = ref<boolean>(f
 const showAccountsIncludedInTotalDialog = ref<boolean>(false);
 
 const enableDisableOptions = computed<LocalizedSwitchOption[]>(() => getAllEnableDisableOptions());
-const allInsightsExplorerDefaultDateRanges = computed<LocalizedDateRange[]>(() => getAllDateRanges(DateRangeScene.InsightsExplorer, false));
+const allInsightsExplorerDefaultDateRanges = computed<LocalizedDateRange[]>(() => getAllDateRanges(DateRangeScene.InsightsExplorer, {}));
 
 const currentTheme = computed<string>({
     get: () => settingsStore.appSettings.theme,

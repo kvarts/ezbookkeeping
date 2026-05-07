@@ -1,18 +1,18 @@
 <template>
     <f7-page @page:afterin="onPageAfterIn">
         <f7-navbar>
-            <f7-nav-left :class="{ 'disabled': loading }"  :back-link="tt('Back')"></f7-nav-left>
+            <f7-nav-left :class="{ 'disabled': loading || updatingLastReconciledTime }"  :back-link="tt('Back')"></f7-nav-left>
             <f7-nav-title>
                 <span style="color: var(--f7-text-color)" v-if="!finishQuery">{{ tt('Reconciliation Statement') }}</span>
-                <f7-link popover-open=".display-mode-popover-menu" :class="{ 'disabled': loading }" v-if="finishQuery">
+                <f7-link popover-open=".display-mode-popover-menu" :class="{ 'disabled': loading || updatingLastReconciledTime }" v-if="finishQuery">
                     <span style="color: var(--f7-text-color)">{{ tt('Reconciliation Statement') }}</span>
                     <f7-icon class="page-title-bar-icon" style="opacity: 0.5"
                              color="gray" f7="chevron_down_circle_fill"></f7-icon>
                 </f7-link>
             </f7-nav-title>
-            <f7-nav-right :class="{ 'navbar-compact-icons': true, 'disabled': loading }">
+            <f7-nav-right :class="{ 'navbar-compact-icons': true, 'disabled': loading || updatingLastReconciledTime }">
                 <f7-link icon-f7="checkmark_alt" :class="{ 'disabled': !validQuery }" @click="reload(false)" v-if="!finishQuery"></f7-link>
-                <f7-link icon-f7="ellipsis" :class="{ 'disabled': loading }" v-if="finishQuery" @click="showMoreActionSheet = true"></f7-link>
+                <f7-link icon-f7="ellipsis" :class="{ 'disabled': loading || updatingLastReconciledTime }" v-if="finishQuery" @click="showMoreActionSheet = true"></f7-link>
             </f7-nav-right>
         </f7-navbar>
 
@@ -265,7 +265,7 @@
                     <div></div>
                     <div class="align-self-flex-end">
                         <span style="margin-inline-end: 4px;">{{ tt('Time Granularity') }}</span>
-                        <f7-link :class="{ 'disabled': loading }" href="#" popover-open=".chart-data-date-aggregation-type-popover-menu">{{ chartDataDateAggregationTypeDisplayName }}</f7-link>
+                        <f7-link :class="{ 'disabled': loading || updatingLastReconciledTime }" href="#" popover-open=".chart-data-date-aggregation-type-popover-menu">{{ chartDataDateAggregationTypeDisplayName }}</f7-link>
                     </div>
                 </div>
             </f7-card-header>
@@ -332,11 +332,12 @@
 
         <f7-actions close-by-outside-click close-on-escape :opened="showMoreActionSheet" @actions:closed="showMoreActionSheet = false">
             <f7-actions-group>
-                <f7-actions-button :class="{ 'disabled': loading }" @click="addTransaction()">{{ tt('Add Transaction') }}</f7-actions-button>
-                <f7-actions-button :class="{ 'disabled': loading }" @click="updateClosingBalance(undefined)">{{ tt('Update Closing Balance') }}</f7-actions-button>
+                <f7-actions-button :class="{ 'disabled': loading || updatingLastReconciledTime }" @click="addTransaction()">{{ tt('Add Transaction') }}</f7-actions-button>
+                <f7-actions-button :class="{ 'disabled': loading || updatingLastReconciledTime }" @click="updateClosingBalance(undefined)">{{ tt('Update Closing Balance') }}</f7-actions-button>
+                <f7-actions-button :class="{ 'disabled': loading || updatingLastReconciledTime }" @click="updateLastReconciledTime()" v-if="newLastReconciledTime">{{ tt('Mark as Reconciled') }}</f7-actions-button>
             </f7-actions-group>
             <f7-actions-group>
-                <f7-actions-button :class="{ 'disabled': loading }" @click="reload(true)">{{ tt('Refresh') }}</f7-actions-button>
+                <f7-actions-button :class="{ 'disabled': loading || updatingLastReconciledTime }" @click="reload(true)">{{ tt('Refresh') }}</f7-actions-button>
             </f7-actions-group>
             <f7-actions-group>
                 <f7-actions-button bold close>{{ tt('Cancel') }}</f7-actions-button>
@@ -380,7 +381,8 @@ import {
     getDateTypeByDateRange,
     getDateTypeByBillingCycleDateRange,
     getDateRangeByDateType,
-    getDateRangeByBillingCycleDateType
+    getDateRangeByBillingCycleDateType,
+    getDateRangeByLastReconciledTimeRangeDateType
 } from '@/lib/datetime.ts';
 
 interface ReconciliationStatementVirtualListData {
@@ -423,9 +425,11 @@ const {
     allDateAggregationTypes,
     allTimezoneTypesUsedForDateRange,
     isCurrentLiabilityAccount,
+    newLastReconciledTime,
     currentAccount,
     currentAccountCurrency,
     currentAccountStatementDate,
+    currentAccountLastReconciledTime,
     displayStartDateTime,
     displayEndDateTime,
     displayTotalInflows,
@@ -433,6 +437,7 @@ const {
     displayTotalBalance,
     displayOpeningBalance,
     displayClosingBalance,
+    updatePageOpenTime,
     setReconciliationStatements,
     getDisplayDate,
     getDisplayTime,
@@ -452,6 +457,7 @@ const loading = ref<boolean>(false);
 const loadingError = ref<unknown | null>(null);
 const queryDateRangeType = ref<number>(DateRange.ThisMonth.type);
 const showAccountBalanceTrendsCharts = ref<boolean>(false);
+const updatingLastReconciledTime = ref<boolean>(false);
 const transactionToDelete = ref<TransactionReconciliationStatementResponseItemWithInfo | null>(null);
 const newClosingBalance = ref<number>(0);
 const showCustomDateRangeSheet = ref<boolean>(false);
@@ -465,7 +471,11 @@ const virtualDataItems = ref<ReconciliationStatementVirtualListData>({
 
 const textDirection = computed<TextDirection>(() => getCurrentLanguageTextDirection());
 const validQuery = computed(() => currentAccount.value && currentAccount.value.type === AccountType.SingleAccount.type);
-const allAvailableDateRanges = computed(() => getAllDateRanges(DateRangeScene.Normal, true, !!accountsStore.getAccountStatementDate(accountId.value)));
+const allAvailableDateRanges = computed(() => getAllDateRanges(DateRangeScene.Normal, {
+    includeCustom: true,
+    includeBillingCycle: !!accountsStore.getAccountStatementDate(accountId.value),
+    includeLastReconciledTimeRange: !!currentAccountLastReconciledTime.value
+}));
 
 const allReconciliationStatementVirtualListItems = computed<ReconciliationStatementVirtualListItem[]>(() => {
     const ret: ReconciliationStatementVirtualListItem[] = [];
@@ -511,6 +521,7 @@ function init(): void {
     const query = props.f7route.query;
     const defaultDateRange = getDateRangeByDateType(queryDateRangeType.value, firstDayOfWeek.value, fiscalYearStart.value);
 
+    updatePageOpenTime();
     finishQuery.value = false;
     loading.value = false;
     accountId.value = query['accountId'] || '';
@@ -537,6 +548,8 @@ function changeDateFilter(dateRangeType: number): void {
 
     if (DateRange.isBillingCycle(dateRangeType)) {
         dateRange = getDateRangeByBillingCycleDateType(dateRangeType, firstDayOfWeek.value, fiscalYearStart.value, accountsStore.getAccountStatementDate(accountId.value));
+    } else if (DateRange.isLastReconciledTimeRange(dateRangeType)) {
+        dateRange = getDateRangeByLastReconciledTimeRangeDateType(dateRangeType, currentAccountLastReconciledTime.value);
     } else {
         dateRange = getDateRangeByDateType(dateRangeType, firstDayOfWeek.value, fiscalYearStart.value);
     }
@@ -652,6 +665,28 @@ function updateClosingBalance(balance?: number): void {
     params.push(`noTransactionDraft=true`);
 
     props.f7router.navigate(`/transaction/add?${params.join('&')}`);
+}
+
+function updateLastReconciledTime(): void {
+    if (!newLastReconciledTime.value) {
+        return;
+    }
+
+    updatingLastReconciledTime.value = true;
+    showLoading(() => updatingLastReconciledTime.value);
+
+    accountsStore.updateAccountLastReconciledTime(accountId.value, newLastReconciledTime.value).then(() => {
+        updatingLastReconciledTime.value = false;
+        hideLoading();
+        showToast('Last reconciled time have been updated');
+    }).catch(error => {
+        updatingLastReconciledTime.value = false;
+        hideLoading();
+
+        if (!error.processed) {
+            showToast(error.message || error);
+        }
+    });
 }
 
 function removeTransaction(transaction: TransactionReconciliationStatementResponseItemWithInfo | null, confirm: boolean): void {

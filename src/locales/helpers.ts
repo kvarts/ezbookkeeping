@@ -1172,36 +1172,26 @@ export function useI18n() {
         return ret;
     }
 
-    function getAllDateRanges(scene: DateRangeScene, includeCustom?: boolean, includeBillingCycle?: boolean): LocalizedDateRange[] {
+    function getAllDateRanges(scene: DateRangeScene, { includeCustom, includeBillingCycle, includeLastReconciledTimeRange } : { includeCustom?: boolean, includeBillingCycle?: boolean, includeLastReconciledTimeRange?: boolean }): LocalizedDateRange[] {
         const ret: LocalizedDateRange[] = [];
         const allDateRanges = DateRange.values();
 
         for (const dateRange of allDateRanges) {
-            if (!dateRange.isAvailableForScene(scene)) {
+            const shouldSkip: boolean = !dateRange.isAvailableForScene(scene)
+                || (dateRange.isBillingCycle && !includeBillingCycle)
+                || (dateRange.isLastReconciledTimeRange && !includeLastReconciledTimeRange)
+                || (dateRange.type === DateRange.Custom.type && !includeCustom);
+
+            if (shouldSkip) {
                 continue;
             }
 
-            if (dateRange.isBillingCycle) {
-                if (includeBillingCycle) {
-                    ret.push({
-                        type: dateRange.type,
-                        displayName: t(dateRange.name),
-                        isBillingCycle: dateRange.isBillingCycle,
-                        isUserCustomRange: dateRange.isUserCustomRange
-                    });
-                }
-
-                continue;
-            }
-
-            if (includeCustom || dateRange.type !== DateRange.Custom.type) {
-                ret.push({
-                    type: dateRange.type,
-                    displayName: t(dateRange.name),
-                    isBillingCycle: dateRange.isBillingCycle,
-                    isUserCustomRange: dateRange.isUserCustomRange
-                });
-            }
+            ret.push({
+                type: dateRange.type,
+                displayName: t(dateRange.name),
+                isBillingCycle: dateRange.isBillingCycle,
+                isUserCustomRange: dateRange.isUserCustomRange
+            });
         }
 
         return ret;

@@ -614,6 +614,11 @@ export interface AccountModifyRequest {
     readonly clientSessionId?: string;
 }
 
+export interface AccountUpdateLastReconciledTimeRequest {
+    readonly id: string;
+    readonly lastReconciledTime: number;
+}
+
 export interface AccountInfoResponse {
     readonly id: string;
     readonly name: string;

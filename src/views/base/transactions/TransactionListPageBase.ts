@@ -105,7 +105,11 @@ export function useTransactionListPageBase() {
     const showTotalAmountInTransactionListPage = computed<boolean>(() => settingsStore.appSettings.showTotalAmountInTransactionListPage);
     const showTagInTransactionListPage = computed<boolean>(() => settingsStore.appSettings.showTagInTransactionListPage);
 
-    const allDateRanges = computed<LocalizedDateRange[]>(() => getAllDateRanges(DateRangeScene.Normal, true, !!accountsStore.getAccountStatementDate(query.value.accountIds)));
+    const allDateRanges = computed<LocalizedDateRange[]>(() => getAllDateRanges(DateRangeScene.Normal, {
+        includeCustom: true,
+        includeBillingCycle: !!accountsStore.getAccountStatementDate(query.value.accountIds),
+        includeLastReconciledTimeRange: !!allAccountsMap.value[query.value.accountIds]?.lastReconciledTime
+    }));
 
     const allAccounts = computed<Account[]>(() => accountsStore.allMixedPlainAccounts);
     const allAccountsMap = computed<Record<string, Account>>(() => accountsStore.allAccountsMap);

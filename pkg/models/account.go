@@ -128,6 +128,12 @@ type AccountModifyRequest struct {
 	ClientSessionId         string                  `json:"clientSessionId"`
 }
 
+// AccountUpdateLastReconciledTimeRequest represents all parameters of account updating last reconciled time request
+type AccountUpdateLastReconciledTimeRequest struct {
+	Id                 int64 `json:"id,string" binding:"required,min=1"`
+	LastReconciledTime int64 `json:"lastReconciledTime" binding:"required"`
+}
+
 // AccountListRequest represents all parameters of account listing request
 type AccountListRequest struct {
 	VisibleOnly bool `form:"visible_only"`

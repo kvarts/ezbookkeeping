@@ -653,6 +653,7 @@ import {
     getDateTypeByBillingCycleDateRange,
     getDateRangeByDateType,
     getDateRangeByBillingCycleDateType,
+    getDateRangeByLastReconciledTimeRangeDateType,
     getFullMonthDateRange,
     getValidMonthDayOrCurrentDayShortDate
 } from '@/lib/datetime.ts';
@@ -931,7 +932,7 @@ function init(): void {
     let dateRange: TimeRangeAndDateType | null = getDateRangeByDateType(initQuery['dateType'] ? parseInt(initQuery['dateType']) : undefined, firstDayOfWeek.value, fiscalYearStart.value);
 
     if (!dateRange && initQuery['dateType'] && initQuery['maxTime'] && initQuery['minTime'] &&
-        (DateRange.isBillingCycle(parseInt(initQuery['dateType'])) || initQuery['dateType'] === DateRange.Custom.type.toString()) &&
+        (DateRange.isBillingCycle(parseInt(initQuery['dateType'])) || DateRange.isLastReconciledTimeRange(parseInt(initQuery['dateType'])) || initQuery['dateType'] === DateRange.Custom.type.toString()) &&
         parseInt(initQuery['maxTime']) > 0 && parseInt(initQuery['minTime']) > 0) {
         dateRange = {
             dateType: parseInt(initQuery['dateType']),
@@ -1087,6 +1088,8 @@ function changeDateFilter(dateType: number): void {
 
     if (DateRange.isBillingCycle(dateType)) {
         dateRange = getDateRangeByBillingCycleDateType(dateType, firstDayOfWeek.value, fiscalYearStart.value, accountsStore.getAccountStatementDate(query.value.accountIds));
+    } else if (DateRange.isLastReconciledTimeRange(dateType)) {
+        dateRange = getDateRangeByLastReconciledTimeRangeDateType(dateType, allAccountsMap.value[query.value.accountIds]?.lastReconciledTime);
     } else {
         dateRange = getDateRangeByDateType(dateType, firstDayOfWeek.value, fiscalYearStart.value);
     }

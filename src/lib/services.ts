@@ -35,6 +35,7 @@ import {
 import type {
     AccountCreateRequest,
     AccountModifyRequest,
+    AccountUpdateLastReconciledTimeRequest,
     AccountInfoResponse,
     AccountHideRequest,
     AccountMoveRequest,
@@ -505,6 +506,9 @@ export default {
     },
     modifyAccount: (req: AccountModifyRequest): ApiResponsePromise<AccountInfoResponse> => {
         return axios.post<ApiResponse<AccountInfoResponse>>('v1/accounts/modify.json', req);
+    },
+    updateAccountLastReconciledTime: (req: AccountUpdateLastReconciledTimeRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/accounts/update/last_reconciled_time.json', req);
     },
     hideAccount: (req: AccountHideRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/accounts/hide.json', req);

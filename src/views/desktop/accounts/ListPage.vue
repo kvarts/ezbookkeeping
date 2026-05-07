@@ -257,6 +257,12 @@
                                                                         <v-menu activator="parent" :open-on-hover="true">
                                                                             <v-list>
                                                                                 <v-list-item class="text-sm" density="compact"
+                                                                                             :title="tt('Mark as Reconciled')"
+                                                                                             :prepend-icon="mdiReceiptTextCheckOutline"
+                                                                                             @click="updateLastReconciledTime(element.getAccountOrSubAccount(activeSubAccount[element.id]))"
+                                                                                             v-if="useLastReconciledTime"></v-list-item>
+                                                                                <v-divider class="my-2" v-if="useLastReconciledTime" />
+                                                                                <v-list-item class="text-sm" density="compact"
                                                                                              :title="tt('Move All Transactions')"
                                                                                              :prepend-icon="mdiSwapHorizontal"
                                                                                              @click="moveAllTransactions(element.getAccountOrSubAccount(activeSubAccount[element.id]))"></v-list-item>
@@ -336,7 +342,12 @@ import { AccountType, AccountCategory } from '@/core/account.ts';
 import type { Account } from '@/models/account.ts';
 
 import { isNumber } from '@/lib/common.ts';
-import { getDateRangeByDateType, getDateRangeByBillingCycleDateType } from '@/lib/datetime.ts';
+import {
+    getCurrentUnixTime,
+    getDateRangeByDateType,
+    getDateRangeByBillingCycleDateType,
+    getDateRangeByLastReconciledTimeRangeDateType
+} from '@/lib/datetime.ts';
 
 import {
     mdiEyeOutline,
@@ -347,6 +358,7 @@ import {
     mdiMenu,
     mdiPencilOutline,
     mdiDotsHorizontalCircleOutline,
+    mdiReceiptTextCheckOutline,
     mdiSwapHorizontal,
     mdiEraser,
     mdiDeleteOutline,
@@ -376,6 +388,7 @@ const {
     defaultAccountCategory,
     firstDayOfWeek,
     fiscalYearStart,
+    useLastReconciledTime,
     allAccounts,
     allCategorizedAccountsMap,
     allAccountCount,
@@ -486,7 +499,11 @@ function accountCurrency(account: Account): string | null {
 }
 
 function accountReconciliationStatementDateRanges(account: Account): LocalizedDateRange[] {
-    return getAllDateRanges(DateRangeScene.Normal, true, !!accountsStore.getAccountStatementDate(account.id));
+    return getAllDateRanges(DateRangeScene.Normal, {
+        includeCustom: true,
+        includeBillingCycle: !!accountsStore.getAccountStatementDate(account.id),
+        includeLastReconciledTimeRange: !!account.lastReconciledTime
+    });
 }
 
 function add(): void {
@@ -533,6 +550,8 @@ function showReconciliationStatementCustomDateRangeDialog(account: Account, date
 
     if (DateRange.isBillingCycle(dateRangeType)) {
         dateRange = getDateRangeByBillingCycleDateType(dateRangeType, firstDayOfWeek.value, fiscalYearStart.value, accountsStore.getAccountStatementDate(account.id));
+    } else if (DateRange.isLastReconciledTimeRange(dateRangeType)) {
+        dateRange = getDateRangeByLastReconciledTimeRangeDateType(dateRangeType, account.lastReconciledTime);
     } else {
         dateRange = getDateRangeByDateType(dateRangeType, firstDayOfWeek.value, fiscalYearStart.value);
     }
@@ -545,6 +564,26 @@ function showReconciliationStatementCustomDateRangeDialog(account: Account, date
         accountId: account.id,
         startTime: dateRange.minTime,
         endTime: dateRange.maxTime
+    });
+}
+
+function updateLastReconciledTime(account: Account): void {
+    loading.value = true;
+
+    accountsStore.updateAccountLastReconciledTime(account.id, getCurrentUnixTime()).then(() => {
+        loading.value = false;
+        snackbar.value?.showMessage('Last reconciled time have been updated');
+
+        if (accountsStore.accountListStateInvalid && !loading.value) {
+            reload(false);
+        }
+
+    }).catch(error => {
+        loading.value = false;
+
+        if (error) {
+            snackbar.value?.showError(error);
+        }
     });
 }
 

@@ -746,6 +746,9 @@ export const useTransactionsStore = defineStore('transactions', () => {
             if (DateRange.isBillingCycle(transactionsFilter.value.dateType) &&
                 (!accountsStore.getAccountStatementDate(filter.accountIds) || accountsStore.getAccountStatementDate(filter.accountIds) !== accountsStore.getAccountStatementDate(transactionsFilter.value.accountIds))) {
                 transactionsFilter.value.dateType = DateRange.Custom.type;
+            } else if (DateRange.isLastReconciledTimeRange(transactionsFilter.value.dateType) &&
+                (!accountsStore.allAccountsMap[filter.accountIds] || accountsStore.allAccountsMap[filter.accountIds]?.lastReconciledTime !== accountsStore.allAccountsMap[transactionsFilter.value.accountIds]?.lastReconciledTime)) {
+                transactionsFilter.value.dateType = DateRange.Custom.type;
             }
 
             transactionsFilter.value.accountIds = filter.accountIds;
@@ -793,7 +796,9 @@ export const useTransactionsStore = defineStore('transactions', () => {
 
         querys.push('dateType=' + transactionsFilter.value.dateType);
 
-        if (DateRange.isBillingCycle(transactionsFilter.value.dateType) || transactionsFilter.value.dateType === DateRange.Custom.type) {
+        if (DateRange.isBillingCycle(transactionsFilter.value.dateType)
+            || DateRange.isLastReconciledTimeRange(transactionsFilter.value.dateType)
+            || transactionsFilter.value.dateType === DateRange.Custom.type) {
             querys.push('maxTime=' + transactionsFilter.value.maxTime);
             querys.push('minTime=' + transactionsFilter.value.minTime);
         }
