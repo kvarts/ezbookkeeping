@@ -1946,6 +1946,7 @@
     "Unable to add account": "Kan rekening niet toevoegen",
     "Unable to save account": "Kan rekening niet opslaan",
     "Mark as Reconciled": "Mark as Reconciled",
+    "Are you sure you want to update the last reconciled time of this account to the current time?": "Are you sure you want to update the last reconciled time of this account to the current time?",
     "Last reconciled time have been updated": "Last reconciled time have been updated",
     "Unable to update last reconciled time": "Unable to update last reconciled time",
     "Show Hidden Accounts": "Verborgen rekeningen tonen",

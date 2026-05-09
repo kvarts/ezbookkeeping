@@ -1946,6 +1946,7 @@
     "Unable to add account": "口座を追加できません",
     "Unable to save account": "口座を保存できません",
     "Mark as Reconciled": "Mark as Reconciled",
+    "Are you sure you want to update the last reconciled time of this account to the current time?": "Are you sure you want to update the last reconciled time of this account to the current time?",
     "Last reconciled time have been updated": "Last reconciled time have been updated",
     "Unable to update last reconciled time": "Unable to update last reconciled time",
     "Show Hidden Accounts": "非表示口座を表示します",

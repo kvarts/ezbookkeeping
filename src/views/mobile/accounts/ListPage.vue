@@ -245,7 +245,7 @@ const props = defineProps<{
 }>();
 
 const { tt, getCurrentLanguageTextDirection } = useI18n();
-const { showAlert, showToast, routeBackOnError } = useI18nUIComponents();
+const { showAlert, showConfirm, showToast, routeBackOnError } = useI18nUIComponents();
 
 const {
     loading,
@@ -381,28 +381,30 @@ function updateLastReconciledTime(account: Account | null): void {
         return;
     }
 
-    updatingLastReconciledTime.value = true;
-    showLoading(() => updatingLastReconciledTime.value);
+    showConfirm('Are you sure you want to update the last reconciled time of this account to the current time?', () => {
+        updatingLastReconciledTime.value = true;
+        showLoading(() => updatingLastReconciledTime.value);
 
-    accountsStore.updateAccountLastReconciledTime(account.id, getCurrentUnixTime()).then(() => {
-        updatingLastReconciledTime.value = false;
-        hideLoading();
-        showToast('Last reconciled time have been updated');
+        accountsStore.updateAccountLastReconciledTime(account.id, getCurrentUnixTime()).then(() => {
+            updatingLastReconciledTime.value = false;
+            hideLoading();
+            showToast('Last reconciled time have been updated');
 
-        if (accountsStore.accountListStateInvalid && !loading.value) {
-            reload();
-        }
-    }).catch(error => {
-        updatingLastReconciledTime.value = false;
-        hideLoading();
+            if (accountsStore.accountListStateInvalid && !loading.value) {
+                reload();
+            }
+        }).catch(error => {
+            updatingLastReconciledTime.value = false;
+            hideLoading();
 
-        if (!error.processed) {
-            showToast(error.message || error);
-        }
+            if (!error.processed) {
+                showToast(error.message || error);
+            }
+        });
+
+        showAccountMoreActionSheet.value = false;
+        accountForMoreActionSheet.value = null;
     });
-
-    showAccountMoreActionSheet.value = false;
-    accountForMoreActionSheet.value = null;
 }
 
 function moveAllTransactions(account: Account | null): void {

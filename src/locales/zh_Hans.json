@@ -1946,6 +1946,7 @@
     "Unable to add account": "无法添加账户",
     "Unable to save account": "无法保存账户",
     "Mark as Reconciled": "标记为已对账",
+    "Are you sure you want to update the last reconciled time of this account to the current time?": "您确定要将该账户的最后对账时间更新为当前时间吗？",
     "Last reconciled time have been updated": "最后对账时间已更新",
     "Unable to update last reconciled time": "无法更新最后对账时间",
     "Show Hidden Accounts": "显示隐藏的账户",

@@ -568,22 +568,24 @@ function showReconciliationStatementCustomDateRangeDialog(account: Account, date
 }
 
 function updateLastReconciledTime(account: Account): void {
-    loading.value = true;
+    confirmDialog.value?.open('Are you sure you want to update the last reconciled time of this account to the current time?').then(() => {
+        loading.value = true;
 
-    accountsStore.updateAccountLastReconciledTime(account.id, getCurrentUnixTime()).then(() => {
-        loading.value = false;
-        snackbar.value?.showMessage('Last reconciled time have been updated');
+        accountsStore.updateAccountLastReconciledTime(account.id, getCurrentUnixTime()).then(() => {
+            loading.value = false;
+            snackbar.value?.showMessage('Last reconciled time have been updated');
 
-        if (accountsStore.accountListStateInvalid && !loading.value) {
-            reload(false);
-        }
+            if (accountsStore.accountListStateInvalid && !loading.value) {
+                reload(false);
+            }
 
-    }).catch(error => {
-        loading.value = false;
+        }).catch(error => {
+            loading.value = false;
 
-        if (error) {
-            snackbar.value?.showError(error);
-        }
+            if (error) {
+                snackbar.value?.showError(error);
+            }
+        });
     });
 }
 
