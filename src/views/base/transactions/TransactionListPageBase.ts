@@ -22,6 +22,7 @@ import type { TransactionCategory } from '@/models/transaction_category.ts';
 import { TransactionTagGroup } from '@/models/transaction_tag_group.ts';
 import type { TransactionTag } from '@/models/transaction_tag.ts';
 import { type Transaction, TransactionTagFilter } from '@/models/transaction.ts';
+import type { TransactionPictureInfoBasicResponse } from '@/models/transaction_picture_info.ts';
 
 import {
     getUtcOffsetByUtcOffsetMinutes,
@@ -49,6 +50,7 @@ export class TransactionListPageType implements TypeAndName {
 
     public static readonly List = new TransactionListPageType(0, 'Transaction List');
     public static readonly Calendar = new TransactionListPageType(1, 'Transaction Calendar');
+    public static readonly Gallery = new TransactionListPageType(2, 'Transaction Gallery');
 
     public static readonly Default = TransactionListPageType.List;
 
@@ -401,6 +403,10 @@ export function useTransactionListPageBase() {
         }
     }
 
+    function getTransactionPictureUrl(pictureInfo?: TransactionPictureInfoBasicResponse | null): string | undefined {
+        return transactionsStore.getTransactionPictureUrl(pictureInfo);
+    }
+
     return {
         // states
         pageType,
@@ -458,5 +464,6 @@ export function useTransactionListPageBase() {
         getDisplayAmount,
         getDisplayMonthTotalAmount,
         getTransactionTypeName,
+        getTransactionPictureUrl
     };
 }

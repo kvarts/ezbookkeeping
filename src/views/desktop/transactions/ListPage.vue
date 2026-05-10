@@ -31,7 +31,7 @@
                                 v-model="queryType"
                             />
                         </div>
-                        <div class="mx-6 mt-4" v-if="pageType === TransactionListPageType.List.type">
+                        <div class="mx-6 mt-4" v-if="pageType === TransactionListPageType.List.type || pageType === TransactionListPageType.Gallery.type">
                             <span class="text-subtitle-2">{{ tt('Transactions Per Page') }}</span>
                             <v-select class="mt-2" density="compact"
                                       item-title="name"
@@ -182,7 +182,7 @@
                                                               v-model="currentCalendarDate"></transaction-calendar>
                                     </v-card-text>
 
-                                    <v-table class="transaction-table" :hover="!loading">
+                                    <v-table class="transaction-table" :hover="!loading" v-if="pageType !== TransactionListPageType.Gallery.type">
                                         <thead>
                                         <tr>
                                             <th class="transaction-table-column-time text-no-wrap">
@@ -595,7 +595,53 @@
                                         </tbody>
                                     </v-table>
 
-                                    <div class="mt-2 mb-4" v-if="pageType === TransactionListPageType.List.type">
+                                    <v-card-text class="transaction-gallery-container" v-if="pageType === TransactionListPageType.Gallery.type">
+                                        <div v-if="loading && (!transactions || !transactions.length || transactions.length < 1)">
+                                            <v-skeleton-loader class="skeleton-no-margin mt-2" type="text" :loading="true"></v-skeleton-loader>
+                                        </div>
+
+                                        <div v-if="!loading && (!transactions || !transactions.length || transactions.length < 1)">
+                                            {{ tt('No transaction data') }}
+                                        </div>
+
+                                        <div :key="date" :class="{ 'disabled': loading }"
+                                             v-for="(transactions, date) in transactionsByDay">
+                                            <div class="text-sm text-body-2 font-weight-bold">
+                                                <div class="d-flex align-center">
+                                                    <span>{{ getDisplayLongDate(transactions[0] as Transaction) }}</span>
+                                                    <v-chip class="ms-1" color="default" size="x-small"
+                                                            v-if="(transactions[0] as Transaction).displayDayOfWeek">
+                                                        {{ getWeekdayLongName((transactions[0] as Transaction).displayDayOfWeek as WeekDay) }}
+                                                    </v-chip>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2 py-2">
+                                                <v-avatar rounded="lg" variant="tonal" size="160"
+                                                          class="cursor-pointer transaction-picture" color="rgba(0,0,0,0)"
+                                                          :key="pictureInfo.pictureId"
+                                                          v-for="[transaction, pictureInfo] in allTransactionPictures(transactions)"
+                                                          @click="show(transaction)">
+                                                    <v-img :src="getTransactionPictureUrl(pictureInfo)">
+                                                        <template #placeholder>
+                                                            <div class="d-flex align-center justify-center fill-height bg-light-primary">
+                                                                <v-progress-circular color="grey-500" indeterminate size="48"></v-progress-circular>
+                                                            </div>
+                                                        </template>
+                                                        <template #error>
+                                                            <div class="d-flex align-center justify-center fill-height bg-light-primary">
+                                                                <span class="text-body-1">{{ tt('Failed to load image, please check whether the config "domain" and "root_url" are set correctly.') }}</span>
+                                                            </div>
+                                                        </template>
+                                                    </v-img>
+                                                    <div class="picture-control-icon">
+                                                        <v-icon size="64" :icon="mdiTextBoxEditOutline"/>
+                                                    </div>
+                                                </v-avatar>
+                                            </div>
+                                        </div>
+                                    </v-card-text>
+
+                                    <div class="mt-2 mb-4" v-if="pageType === TransactionListPageType.List.type || pageType === TransactionListPageType.Gallery.type">
                                         <pagination-buttons :totalPageCount="totalPageCount"
                                                             v-model="paginationCurrentPage"></pagination-buttons>
                                     </div>
@@ -681,6 +727,7 @@ import {
     type Year0BasedMonth,
     type LocalizedRecentMonthDateRange,
     type TimeRangeAndDateType,
+    type WeekDay,
     DateRangeScene,
     DateRange
 } from '@/core/datetime.ts';
@@ -720,6 +767,7 @@ import {
     categoryTypeToTransactionType,
     transactionTypeToCategoryType
 } from '@/lib/category.ts';
+import { allTransactionPictures } from '@/lib/transaction.ts';
 import { isDataExportingEnabled, isDataImportingEnabled, isTransactionFromAIImageRecognitionEnabled } from '@/lib/server_settings.ts';
 import { scrollToSelectedItem, startDownloadFile } from '@/lib/ui/common.ts';
 import logger from '@/lib/logger.ts';
@@ -739,7 +787,8 @@ import {
     mdiArrowRight,
     mdiPound,
     mdiMagicStaff,
-    mdiTextBoxOutline
+    mdiTextBoxOutline,
+    mdiTextBoxEditOutline
 } from '@mdi/js';
 
 interface TransactionListProps {
@@ -830,6 +879,7 @@ const {
     getDisplayAmount,
     getDisplayMonthTotalAmount,
     getTransactionTypeName,
+    getTransactionPictureUrl
 } = useTransactionListPageBase();
 
 const settingsStore = useSettingsStore();
@@ -886,7 +936,7 @@ const allPageCounts = computed<NameNumeralValue[]>(() => {
     return pageCounts;
 });
 
-const recentMonthDateRanges = computed<LocalizedRecentMonthDateRange[]>(() => getAllRecentMonthDateRanges(pageType.value === TransactionListPageType.List.type, true));
+const recentMonthDateRanges = computed<LocalizedRecentMonthDateRange[]>(() => getAllRecentMonthDateRanges(pageType.value === TransactionListPageType.List.type || pageType.value === TransactionListPageType.Gallery.type, true));
 
 const allTransactionTemplates = computed<TransactionTemplate[]>(() => {
     const allTemplates = transactionTemplatesStore.allVisibleTemplates;
@@ -902,7 +952,7 @@ const allowCategoryTypes = computed<string>(() => {
 });
 
 const transactions = computed<Transaction[]>(() => {
-    if (pageType.value === TransactionListPageType.List.type) {
+    if (pageType.value === TransactionListPageType.List.type || pageType.value === TransactionListPageType.Gallery.type) {
         if (queryMonthlyData.value) {
             const transactionData = currentMonthTransactionData.value;
 
@@ -940,6 +990,22 @@ const transactions = computed<Transaction[]>(() => {
     } else {
         return [];
     }
+});
+
+const transactionsByDay = computed<Record<string, Transaction[]>>(() => {
+    const transactionsByDay: Record<string, Transaction[]> = {};
+
+    for (const transaction of transactions.value) {
+        if (!transaction.gregorianCalendarYearDashMonthDashDay) {
+            continue;
+        }
+
+        const transactions: Transaction[] = transactionsByDay[transaction.gregorianCalendarYearDashMonthDashDay] ?? [];
+        transactions.push(transaction);
+        transactionsByDay[transaction.gregorianCalendarYearDashMonthDashDay] = transactions;
+    }
+
+    return transactionsByDay;
 });
 
 const recentDateRangeIndex = computed<number>({
@@ -1166,6 +1232,7 @@ function init(initProps: TransactionListProps): void {
 function reload(force: boolean, init: boolean): void {
     loading.value = true;
 
+    const isGalleryMode = pageType.value === TransactionListPageType.Gallery.type;
     const page = currentPage.value;
 
     Promise.all([
@@ -1188,6 +1255,8 @@ function reload(force: boolean, init: boolean): void {
             return transactionsStore.loadMonthlyAllTransactions({
                 year: currentYear,
                 month: currentMonth,
+                mustHavePictures: isGalleryMode,
+                withPictures: isGalleryMode,
                 autoExpand: true,
                 defaultCurrency: defaultCurrency.value
             });
@@ -1196,7 +1265,9 @@ function reload(force: boolean, init: boolean): void {
                 reload: true,
                 count: countPerPage.value,
                 page: page,
+                mustHavePictures: isGalleryMode,
                 withCount: page <= 1,
+                withPictures: isGalleryMode,
                 autoExpand: true,
                 defaultCurrency: defaultCurrency.value
             });
@@ -1895,5 +1966,9 @@ init(props);
 
 .transaction-calendar-container .dp__main .dp__calendar .dp__calendar_row > .dp__calendar_item .transaction-calendar-daily-amounts > span.transaction-calendar-daily-amount {
     font-size: 0.95rem;
+}
+
+.transaction-gallery-container {
+    color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 </style>
