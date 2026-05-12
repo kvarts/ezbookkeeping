@@ -6,6 +6,7 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
 	"github.com/mayswind/ezbookkeeping/pkg/log"
+	"github.com/mayswind/ezbookkeeping/pkg/mcp"
 	"github.com/mayswind/ezbookkeeping/pkg/services"
 	"github.com/mayswind/ezbookkeeping/pkg/settings"
 	"github.com/mayswind/ezbookkeeping/pkg/utils"
@@ -108,13 +109,22 @@ func JWTMCPAuthorization(config *settings.Config) core.MiddlewareHandlerFunc {
 		claims, tokenContext, err := getTokenClaims(c, TOKEN_SOURCE_TYPE_HEADER)
 
 		if err != nil {
+			setMCPBearerChallenge(c, config)
 			utils.PrintJsonErrorResult(c, err)
 			return
 		}
 
 		if claims.Type != core.USER_TOKEN_TYPE_MCP {
 			log.Warnf(c, "[authorization.jwtAuthorization] user \"uid:%d\" token type (%d) is not mcp token", claims.Uid, claims.Type)
+			setMCPBearerChallenge(c, config)
 			utils.PrintJsonErrorResult(c, errs.ErrCurrentInvalidTokenType)
+			return
+		}
+
+		if claims.Audience != "" && claims.Audience != mcp.CanonicalMCPResource(config) {
+			log.Warnf(c, "[authorization.jwtAuthorization] user \"uid:%d\" mcp token audience \"%s\" is invalid", claims.Uid, claims.Audience)
+			setMCPBearerChallenge(c, config)
+			utils.PrintJsonErrorResult(c, errs.ErrCurrentInvalidToken)
 			return
 		}
 

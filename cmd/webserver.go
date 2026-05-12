@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -232,9 +233,26 @@ func startWebServer(c *core.CliContext) error {
 	}
 
 	if config.EnableMCPServer {
+		if config.MCPOAuthEnable {
+			router.GET("/.well-known/oauth-protected-resource", bindRawApi(api.MCPOAuth.ProtectedResourceMetadataHandler))
+			router.GET("/.well-known/oauth-protected-resource/mcp", bindRawApi(api.MCPOAuth.ProtectedResourceMetadataHandler))
+			router.GET("/.well-known/oauth-authorization-server", bindRawApi(api.MCPOAuth.AuthorizationServerMetadataHandler))
+
+			mcpOAuthRoute := router.Group("/oauth2/mcp")
+			mcpOAuthRoute.Use(bindMiddleware(middlewares.RequestId(config)))
+			mcpOAuthRoute.Use(bindMiddleware(middlewares.RequestLog))
+			{
+				mcpOAuthRoute.GET("/authorize", bindRawApi(api.MCPOAuth.AuthorizeHandler))
+				mcpOAuthRoute.POST("/authorize", bindRawApi(api.MCPOAuth.AuthorizeHandler))
+				mcpOAuthRoute.POST("/token", bindRawApi(api.MCPOAuth.TokenHandler))
+			}
+		}
+
 		mcpRoute := router.Group("/mcp")
 		mcpRoute.Use(bindMiddleware(middlewares.RequestId(config)))
 		mcpRoute.Use(bindMiddleware(middlewares.RequestLog))
+		mcpRoute.Use(bindMiddleware(middlewares.MCPHTTPHeaders(config)))
+		mcpRoute.Use(bindMiddleware(middlewares.MCPOrigin(config)))
 		mcpRoute.Use(bindMiddleware(middlewares.MCPServerIpLimit(config)))
 		mcpRoute.Use(bindMiddleware(middlewares.JWTMCPAuthorization(config)))
 		{
@@ -534,6 +552,12 @@ func bindApi(fn core.ApiHandlerFunc) gin.HandlerFunc {
 	}
 }
 
+func bindRawApi(fn func(*core.WebContext)) gin.HandlerFunc {
+	return func(ginCtx *gin.Context) {
+		fn(core.WrapWebContext(ginCtx))
+	}
+}
+
 func bindApiWithTokenUpdate(fn core.ApiHandlerFunc, config *settings.Config) gin.HandlerFunc {
 	return func(ginCtx *gin.Context) {
 		c := core.WrapWebContext(ginCtx)
@@ -563,6 +587,40 @@ func bindJSONRPCApi(fns map[string]core.JSONRPCApiHandlerFunc, skipMethods map[s
 			return
 		}
 
+		if jsonRPCRequest.JSONRPC != core.JSONRPCVersion || jsonRPCRequest.Method == "" {
+			utils.PrintJSONRPCErrorResult(c, &jsonRPCRequest, errs.ErrParameterInvalid)
+			return
+		}
+
+		rawRequest := make(map[string]any)
+		reqErr = c.ShouldBindBodyWithJSON(&rawRequest)
+
+		if reqErr != nil {
+			utils.PrintJSONRPCErrorResult(c, nil, errs.NewIncompleteOrIncorrectSubmissionError(reqErr))
+			return
+		}
+
+		id, hasId := rawRequest["id"]
+
+		if hasId && !isValidJSONRPCRequestId(id) {
+			utils.PrintJSONRPCErrorResult(c, &jsonRPCRequest, errs.ErrParameterInvalid)
+			return
+		}
+
+		if jsonRPCRequest.Method != "initialize" {
+			protocolVersion := c.GetHeader(mcp.MCPProtocolVersionHeaderName)
+
+			if protocolVersion != "" && !mcp.SupportedMCPVersion[mcp.MCPProtocolVersion(protocolVersion)] {
+				utils.PrintJSONRPCErrorResult(c, &jsonRPCRequest, errs.ErrMCPProtocolVersionInvalid)
+				return
+			}
+		}
+
+		if !hasId {
+			c.AbortWithStatus(http.StatusAccepted)
+			return
+		}
+
 		if skipMethods != nil {
 			httpStatusCode, exists := skipMethods[jsonRPCRequest.Method]
 
@@ -586,6 +644,17 @@ func bindJSONRPCApi(fns map[string]core.JSONRPCApiHandlerFunc, skipMethods map[s
 		} else {
 			utils.PrintJSONRPCSuccessResult(c, &jsonRPCRequest, result)
 		}
+	}
+}
+
+func isValidJSONRPCRequestId(id any) bool {
+	switch v := id.(type) {
+	case string:
+		return true
+	case float64:
+		return math.Trunc(v) == v
+	default:
+		return false
 	}
 }
 

@@ -182,6 +182,7 @@ func (a *ModelContextProtocolAPI) ListToolsHandler(c *core.WebContext, jsonRPCRe
 			InputSchema: toolsInfo[i].InputSchema,
 			Title:       toolsInfo[i].Title,
 			Description: toolsInfo[i].Description,
+			Annotations: toolsInfo[i].Annotations,
 		}
 
 		if mcpVersion >= string(mcp.ToolResultStructuredContentMinVersion) {
@@ -218,6 +219,11 @@ func (a *ModelContextProtocolAPI) CallToolHandler(c *core.WebContext, jsonRPCReq
 		}
 	} else {
 		return nil, errs.ErrIncompleteOrIncorrectSubmission
+	}
+
+	if !a.hasMCPScope(c, mcp.Container.GetRequiredScope(callToolReq.Name)) {
+		c.Header("WWW-Authenticate", `Bearer error="insufficient_scope", scope="`+mcp.Container.GetRequiredScope(callToolReq.Name)+`"`)
+		return nil, errs.ErrMCPInsufficientScope
 	}
 
 	result, err := mcp.Container.HandleTool(c, &callToolReq, user, a.CurrentConfig(), a)
@@ -262,4 +268,14 @@ func (a *ModelContextProtocolAPI) GetUserService() *services.UserService {
 // getMCPVersion returns the MCP protocol version from the request header
 func (a *ModelContextProtocolAPI) getMCPVersion(c *core.WebContext) string {
 	return c.GetHeader(mcp.MCPProtocolVersionHeaderName)
+}
+
+func (a *ModelContextProtocolAPI) hasMCPScope(c *core.WebContext, scope string) bool {
+	claims := c.GetTokenClaims()
+
+	if claims == nil || claims.Scope == "" {
+		return true
+	}
+
+	return claims.HasScope(scope)
 }

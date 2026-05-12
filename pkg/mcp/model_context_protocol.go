@@ -12,13 +12,14 @@ type MCPProtocolVersion string
 
 // MCP Protocol Versions
 const (
+	MCPProtocolVersion20251125 MCPProtocolVersion = "2025-11-25"
 	MCPProtocolVersion20250618 MCPProtocolVersion = "2025-06-18"
 	MCPProtocolVersion20250326 MCPProtocolVersion = "2025-03-26"
 	MCPProtocolVersion20241105 MCPProtocolVersion = "2024-11-05"
 )
 
 // LatestSupportedMCPVersion defines the latest supported version of Model Context Protocol (MCP)
-const LatestSupportedMCPVersion = MCPProtocolVersion20250618
+const LatestSupportedMCPVersion = MCPProtocolVersion20251125
 
 // ToolResultStructuredContentMinVersion defines the minimum version of structured content supported in tool results
 const ToolResultStructuredContentMinVersion = MCPProtocolVersion20250618
@@ -28,10 +29,18 @@ const MCPProtocolVersionHeaderName = "MCP-Protocol-Version"
 
 // SupportedMCPVersion defines a map of supported MCP versions
 var SupportedMCPVersion = map[MCPProtocolVersion]bool{
+	MCPProtocolVersion20251125: true,
 	MCPProtocolVersion20250618: true,
 	MCPProtocolVersion20250326: true,
 	MCPProtocolVersion20241105: true,
 }
+
+const (
+	// MCPReadScope allows calling read-only MCP tools.
+	MCPReadScope = "mcp:read"
+	// MCPWriteScope allows calling write MCP tools.
+	MCPWriteScope = "mcp:write"
+)
 
 // MCPInitializeRequest defines the request structure for initializing the MCP connection
 type MCPInitializeRequest struct {
@@ -124,11 +133,19 @@ type MCPListToolsResponse struct {
 
 // MCPTool defines the structure of a tool in the MCP
 type MCPTool struct {
-	Name         string             `json:"name"`
-	InputSchema  *jsonschema.Schema `json:"inputSchema"`
-	OutputSchema *jsonschema.Schema `json:"outputSchema,omitempty"`
-	Title        string             `json:"title,omitempty"`
-	Description  string             `json:"description,omitempty"`
+	Name         string              `json:"name"`
+	InputSchema  *jsonschema.Schema  `json:"inputSchema"`
+	OutputSchema *jsonschema.Schema  `json:"outputSchema,omitempty"`
+	Title        string              `json:"title,omitempty"`
+	Description  string              `json:"description,omitempty"`
+	Annotations  *MCPToolAnnotations `json:"annotations,omitempty"`
+}
+
+// MCPToolAnnotations defines MCP tool safety hints.
+type MCPToolAnnotations struct {
+	ReadOnlyHint    bool `json:"readOnlyHint"`
+	DestructiveHint bool `json:"destructiveHint"`
+	OpenWorldHint   bool `json:"openWorldHint"`
 }
 
 // MCPCallToolRequest defines the request structure for listing tools in the MCP

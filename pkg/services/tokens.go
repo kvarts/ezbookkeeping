@@ -1,6 +1,8 @@
 package services
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -161,6 +163,166 @@ func (s *TokenService) CreateMCPTokenViaCli(c *core.CliContext, user *models.Use
 
 	token, _, tokenRecord, err := s.createToken(c, user, core.USER_TOKEN_TYPE_MCP, core.TokenUserAgentCreatedViaCli, "", tokenExpiredTimeDuration)
 	return token, tokenRecord, err
+}
+
+// CreateMCPOAuthAccessToken generates a short-lived MCP OAuth access token.
+func (s *TokenService) CreateMCPOAuthAccessToken(c core.Context, user *models.User, clientId string, resource string, scope string) (string, *core.UserTokenClaims, error) {
+	token, claims, _, err := s.createMCPOAuthAccessToken(c, user, clientId, resource, scope, s.CurrentConfig().MCPOAuthAccessTokenExpiredTimeDuration)
+	return token, claims, err
+}
+
+// CreateMCPOAuthAuthorizationCode creates a one-time authorization code.
+func (s *TokenService) CreateMCPOAuthAuthorizationCode(c core.Context, uid int64, clientId string, redirectUri string, resource string, scope string, codeChallenge string) (string, error) {
+	if uid <= 0 {
+		return "", errs.ErrUserIdInvalid
+	}
+
+	code, err := utils.GetRandomString(64)
+
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now()
+	record := &models.MCPOAuthAuthorizationCode{
+		CodeHash:        HashMCPOAuthToken(code),
+		Uid:             uid,
+		ClientId:        clientId,
+		RedirectUri:     redirectUri,
+		Resource:        resource,
+		Scope:           scope,
+		CodeChallenge:   codeChallenge,
+		CreatedUnixTime: now.Unix(),
+		ExpiredUnixTime: now.Add(s.CurrentConfig().MCPOAuthAuthorizationCodeExpiredTimeDuration).Unix(),
+	}
+
+	err = s.TokenDB(uid).DoTransaction(c, func(sess *xorm.Session) error {
+		_, err := sess.Insert(record)
+		return err
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return code, nil
+}
+
+// GetMCPOAuthAuthorizationCode returns the stored authorization code by plaintext code.
+func (s *TokenService) GetMCPOAuthAuthorizationCode(c core.Context, code string) (*models.MCPOAuthAuthorizationCode, error) {
+	codeHash := HashMCPOAuthToken(code)
+
+	for i := 0; i < s.TokenDBCount(); i++ {
+		record := &models.MCPOAuthAuthorizationCode{}
+		has, err := s.TokenDBByIndex(i).NewSession(c).Where("code_hash=?", codeHash).Limit(1).Get(record)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if has {
+			return record, nil
+		}
+	}
+
+	return nil, errs.ErrMCPOAuthInvalidGrant
+}
+
+// MarkMCPOAuthAuthorizationCodeUsed marks an authorization code as consumed.
+func (s *TokenService) MarkMCPOAuthAuthorizationCodeUsed(c core.Context, record *models.MCPOAuthAuthorizationCode) error {
+	if record == nil || record.Uid <= 0 || record.CodeHash == "" {
+		return errs.ErrMCPOAuthInvalidGrant
+	}
+
+	record.UsedUnixTime = time.Now().Unix()
+
+	return s.TokenDB(record.Uid).DoTransaction(c, func(sess *xorm.Session) error {
+		updatedRows, err := sess.Cols("used_unix_time").Where("code_hash=? AND used_unix_time=0", record.CodeHash).Update(record)
+
+		if err != nil {
+			return err
+		} else if updatedRows < 1 {
+			return errs.ErrMCPOAuthInvalidGrant
+		}
+
+		return nil
+	})
+}
+
+// CreateMCPOAuthRefreshToken creates an opaque refresh token.
+func (s *TokenService) CreateMCPOAuthRefreshToken(c core.Context, uid int64, clientId string, resource string, scope string) (string, error) {
+	if uid <= 0 {
+		return "", errs.ErrUserIdInvalid
+	}
+
+	refreshToken, err := utils.GetRandomString(64)
+
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now()
+	record := &models.MCPOAuthRefreshToken{
+		RefreshTokenHash: HashMCPOAuthToken(refreshToken),
+		Uid:              uid,
+		ClientId:         clientId,
+		Resource:         resource,
+		Scope:            scope,
+		CreatedUnixTime:  now.Unix(),
+		ExpiredUnixTime:  now.Add(s.CurrentConfig().MCPOAuthRefreshTokenExpiredTimeDuration).Unix(),
+	}
+
+	err = s.TokenDB(uid).DoTransaction(c, func(sess *xorm.Session) error {
+		_, err := sess.Insert(record)
+		return err
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return refreshToken, nil
+}
+
+// GetMCPOAuthRefreshToken returns the stored refresh token by plaintext token.
+func (s *TokenService) GetMCPOAuthRefreshToken(c core.Context, refreshToken string) (*models.MCPOAuthRefreshToken, error) {
+	refreshTokenHash := HashMCPOAuthToken(refreshToken)
+
+	for i := 0; i < s.TokenDBCount(); i++ {
+		record := &models.MCPOAuthRefreshToken{}
+		has, err := s.TokenDBByIndex(i).NewSession(c).Where("refresh_token_hash=?", refreshTokenHash).Limit(1).Get(record)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if has {
+			return record, nil
+		}
+	}
+
+	return nil, errs.ErrMCPOAuthInvalidGrant
+}
+
+// RevokeMCPOAuthRefreshToken revokes a refresh token.
+func (s *TokenService) RevokeMCPOAuthRefreshToken(c core.Context, record *models.MCPOAuthRefreshToken) error {
+	if record == nil || record.Uid <= 0 || record.RefreshTokenHash == "" {
+		return errs.ErrMCPOAuthInvalidGrant
+	}
+
+	record.RevokedUnixTime = time.Now().Unix()
+
+	return s.TokenDB(record.Uid).DoTransaction(c, func(sess *xorm.Session) error {
+		updatedRows, err := sess.Cols("revoked_unix_time").Where("refresh_token_hash=? AND revoked_unix_time=0", record.RefreshTokenHash).Update(record)
+
+		if err != nil {
+			return err
+		} else if updatedRows < 1 {
+			return errs.ErrMCPOAuthInvalidGrant
+		}
+
+		return nil
+	})
 }
 
 // CreateOAuth2CallbackRequireVerifyToken generates a new OAuth 2.0 callback token requiring user to verify and saves to database
@@ -460,6 +622,58 @@ func (s *TokenService) createToken(c core.Context, user *models.User, tokenType 
 	}
 
 	return tokenString, claims, tokenRecord, err
+}
+
+func (s *TokenService) createMCPOAuthAccessToken(c core.Context, user *models.User, clientId string, resource string, scope string, expiryDate time.Duration) (string, *core.UserTokenClaims, *models.TokenRecord, error) {
+	var err error
+	now := time.Now()
+
+	tokenRecord := &models.TokenRecord{
+		Uid:              user.Uid,
+		UserTokenId:      s.getUserTokenId(),
+		TokenType:        core.USER_TOKEN_TYPE_MCP,
+		UserAgent:        core.TokenUserAgentForMCP,
+		CreatedUnixTime:  now.Unix(),
+		ExpiredUnixTime:  now.Add(expiryDate).Unix(),
+		LastSeenUnixTime: now.Unix(),
+	}
+
+	if tokenRecord.Secret, err = utils.GetRandomString(10); err != nil {
+		return "", nil, nil, err
+	}
+
+	claims := &core.UserTokenClaims{
+		UserTokenId: utils.Int64ToString(tokenRecord.UserTokenId),
+		Uid:         tokenRecord.Uid,
+		Username:    user.Username,
+		Type:        tokenRecord.TokenType,
+		IssuedAt:    tokenRecord.CreatedUnixTime,
+		ExpiresAt:   tokenRecord.ExpiredUnixTime,
+		Audience:    resource,
+		Scope:       scope,
+		ClientId:    clientId,
+	}
+
+	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := jwtToken.SignedString([]byte(tokenRecord.Secret))
+
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	err = s.createTokenRecord(c, tokenRecord)
+
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	return tokenString, claims, tokenRecord, err
+}
+
+// HashMCPOAuthToken returns the SHA-256 hex hash of an OAuth secret.
+func HashMCPOAuthToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s *TokenService) getTokenRecord(c core.Context, uid int64, userTokenId int64, createUnixTime int64) (*models.TokenRecord, error) {

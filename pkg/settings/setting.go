@@ -183,6 +183,11 @@ const (
 	defaultOAuth2StateExpiredTime uint32 = 300   // 5 minutes
 	defaultOAuth2RequestTimeout   uint32 = 10000 // 10 seconds
 
+	defaultMCPOAuthAccessTokenExpiredTime       uint32 = 3600
+	defaultMCPOAuthRefreshTokenExpiredTime      uint32 = 2592000
+	defaultMCPOAuthAuthorizationCodeExpiredTime uint32 = 300
+	defaultMCPOAuthAllowedOrigins               string = "https://chatgpt.com,https://chat.openai.com"
+
 	defaultTransactionPictureFileMaxSize uint32 = 10485760 // 10MB
 	defaultUserAvatarFileMaxSize         uint32 = 1048576  // 1MB
 
@@ -303,8 +308,17 @@ type Config struct {
 	EnableRequestIdHeader bool
 
 	// MCP
-	EnableMCPServer     bool
-	MCPAllowedRemoteIPs []*core.IPPattern
+	EnableMCPServer                              bool
+	MCPAllowedRemoteIPs                          []*core.IPPattern
+	MCPOAuthEnable                               bool
+	MCPOAuthIssuer                               string
+	MCPOAuthAllowedOrigins                       []string
+	MCPOAuthAccessTokenExpiredTime               uint32
+	MCPOAuthAccessTokenExpiredTimeDuration       time.Duration
+	MCPOAuthRefreshTokenExpiredTime              uint32
+	MCPOAuthRefreshTokenExpiredTimeDuration      time.Duration
+	MCPOAuthAuthorizationCodeExpiredTime         uint32
+	MCPOAuthAuthorizationCodeExpiredTimeDuration time.Duration
 
 	// Database
 	DatabaseConfig     *DatabaseConfig
@@ -677,6 +691,16 @@ func loadMCPServerConfiguration(config *Config, configFile *ini.File, sectionNam
 	if err != nil {
 		return err
 	}
+
+	config.MCPOAuthEnable = getConfigItemBoolValue(configFile, sectionName, "mcp_oauth_enable", false)
+	config.MCPOAuthIssuer = strings.TrimRight(getConfigItemStringValue(configFile, sectionName, "mcp_oauth_issuer", strings.TrimRight(config.RootUrl, "/")), "/")
+	config.MCPOAuthAllowedOrigins = getConfigItemStringArrayValue(configFile, sectionName, "mcp_oauth_allowed_origins", defaultMCPOAuthAllowedOrigins)
+	config.MCPOAuthAccessTokenExpiredTime = getConfigItemUint32Value(configFile, sectionName, "mcp_oauth_access_token_expired_time", defaultMCPOAuthAccessTokenExpiredTime)
+	config.MCPOAuthAccessTokenExpiredTimeDuration = time.Duration(config.MCPOAuthAccessTokenExpiredTime) * time.Second
+	config.MCPOAuthRefreshTokenExpiredTime = getConfigItemUint32Value(configFile, sectionName, "mcp_oauth_refresh_token_expired_time", defaultMCPOAuthRefreshTokenExpiredTime)
+	config.MCPOAuthRefreshTokenExpiredTimeDuration = time.Duration(config.MCPOAuthRefreshTokenExpiredTime) * time.Second
+	config.MCPOAuthAuthorizationCodeExpiredTime = getConfigItemUint32Value(configFile, sectionName, "mcp_oauth_authorization_code_expired_time", defaultMCPOAuthAuthorizationCodeExpiredTime)
+	config.MCPOAuthAuthorizationCodeExpiredTimeDuration = time.Duration(config.MCPOAuthAuthorizationCodeExpiredTime) * time.Second
 
 	return nil
 }
@@ -1335,6 +1359,27 @@ func getConfigItemStringValue(configFile *ini.File, sectionName string, itemName
 	} else {
 		return value
 	}
+}
+
+func getConfigItemStringArrayValue(configFile *ini.File, sectionName string, itemName string, defaultValue string) []string {
+	value := getConfigItemStringValue(configFile, sectionName, itemName, defaultValue)
+
+	if value == "" {
+		return nil
+	}
+
+	items := strings.Split(value, ",")
+	result := make([]string, 0, len(items))
+
+	for i := 0; i < len(items); i++ {
+		item := strings.TrimSpace(items[i])
+
+		if item != "" {
+			result = append(result, item)
+		}
+	}
+
+	return result
 }
 
 func getConfigItemUint8Value(configFile *ini.File, sectionName string, itemName string, defaultValue uint8) uint8 {

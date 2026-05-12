@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -38,6 +39,9 @@ type UserTokenClaims struct {
 	Type        TokenType `json:"type"`
 	IssuedAt    int64     `json:"iat"`
 	ExpiresAt   int64     `json:"exp"`
+	Audience    string    `json:"aud,omitempty"`
+	Scope       string    `json:"scope,omitempty"`
+	ClientId    string    `json:"client_id,omitempty"`
 }
 
 // GetExpirationTime returns the expiration time of this token
@@ -71,5 +75,26 @@ func (c *UserTokenClaims) GetSubject() (string, error) {
 
 // GetAudience returns the audience of this token
 func (c *UserTokenClaims) GetAudience() (jwt.ClaimStrings, error) {
+	if c.Audience != "" {
+		return jwt.ClaimStrings{c.Audience}, nil
+	}
+
 	return jwt.ClaimStrings{}, nil
+}
+
+// HasScope returns whether this token contains the specified scope.
+func (c *UserTokenClaims) HasScope(scope string) bool {
+	if scope == "" {
+		return true
+	}
+
+	scopes := strings.Fields(c.Scope)
+
+	for i := 0; i < len(scopes); i++ {
+		if scopes[i] == scope {
+			return true
+		}
+	}
+
+	return false
 }

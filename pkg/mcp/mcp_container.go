@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"errors"
+
 	"github.com/invopop/jsonschema"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 
@@ -59,6 +61,15 @@ func (c *MCPContainer) HandleTool(ctx *core.WebContext, callToolReq *MCPCallTool
 	return nil, errs.ErrApiNotFound
 }
 
+// GetRequiredScope returns the OAuth scope required by the given tool.
+func (c *MCPContainer) GetRequiredScope(toolName string) string {
+	if toolName == MCPAddTransactionToolHandler.Name() {
+		return MCPWriteScope
+	}
+
+	return MCPReadScope
+}
+
 // InitializeMCPHandlers initializes the all mcp handlers according to the config
 func InitializeMCPHandlers(config *settings.Config) error {
 	container := &MCPContainer{
@@ -115,7 +126,12 @@ func handleTool[T MCPTextContent | MCPImageContent | MCPAudioContent | MCPResour
 	structuredResponse, result, err := handler.Handle(ctx, callToolReq, user, currentConfig, services)
 
 	if err != nil {
-		return nil, errs.Or(err, errs.ErrOperationFailed)
+		return MCPCallToolResponse[T]{
+			Content: []*T{
+				any(NewMCPTextContent(err.Error())).(*T),
+			},
+			IsError: true,
+		}, nil
 	}
 
 	callToolResp := MCPCallToolResponse[T]{
@@ -134,6 +150,11 @@ func createNewMCPToolInfo[T MCPTextContent | MCPImageContent | MCPAudioContent |
 	mcpTool := &MCPTool{
 		Name:        name,
 		Description: handler.Description(),
+		Annotations: &MCPToolAnnotations{
+			ReadOnlyHint:    name != MCPAddTransactionToolHandler.Name(),
+			DestructiveHint: false,
+			OpenWorldHint:   false,
+		},
 	}
 
 	schemeGenerator := jsonschema.Reflector{
@@ -163,4 +184,17 @@ func createNewMCPToolInfo[T MCPTextContent | MCPImageContent | MCPAudioContent |
 	}
 
 	return mcpTool
+}
+
+func newToolErrorResponse[T MCPTextContent | MCPImageContent | MCPAudioContent | MCPResourceLink | MCPEmbeddedResource](err error) MCPCallToolResponse[T] {
+	if err == nil {
+		err = errors.New("operation failed")
+	}
+
+	return MCPCallToolResponse[T]{
+		Content: []*T{
+			any(NewMCPTextContent(err.Error())).(*T),
+		},
+		IsError: true,
+	}
 }

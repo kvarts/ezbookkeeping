@@ -77,6 +77,22 @@ func updateAllDatabaseTablesStructure(c *core.CliContext) error {
 
 	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] token record table maintained successfully")
 
+	err = datastore.Container.TokenStore.SyncStructs(new(models.MCPOAuthAuthorizationCode))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] mcp oauth authorization code table maintained successfully")
+
+	err = datastore.Container.TokenStore.SyncStructs(new(models.MCPOAuthRefreshToken))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] mcp oauth refresh token table maintained successfully")
+
 	err = datastore.Container.UserDataStore.SyncStructs(new(models.Account))
 
 	if err != nil {
